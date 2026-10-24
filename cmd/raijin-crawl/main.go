@@ -121,7 +121,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		res.Target = targetSummary(inScope, res.Omitted["out_of_scope"])
 
-		if *rawPath == "" {
+		tempRaw := *rawPath == ""
+		if tempRaw {
 			f, err := os.CreateTemp("", "raijin-crawl-*.jsonl")
 			if err != nil {
 				fmt.Fprintln(stderr, "raijin-crawl:", err)
@@ -149,6 +150,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			res.Errors = append(res.Errors, schema.Error{Kind: "missing_engine", Hint: "install katana (go install github.com/projectdiscovery/katana/cmd/katana@latest) or pass --katana <path>"})
 			res.Summary = "katana not found, nothing crawled"
 			res.Raw = ""
+			if tempRaw {
+				os.Remove(*rawPath)
+			}
 			write(stdout, &res, *format, *pretty)
 			return 2
 		case err != nil:
