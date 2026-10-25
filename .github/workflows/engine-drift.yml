@@ -12,7 +12,6 @@ on:
 permissions:
   contents: write
   issues: write
-  pull-requests: write
 
 jobs:
   drift:
@@ -22,6 +21,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -62,39 +63,47 @@ jobs:
             bench.log
           retention-days: 14
       - name: Open or update the drift issue
-        if: failure() && steps.bench.conclusion == 'failure'
+        if: failure() && (steps.bench.conclusion == 'failure' || steps.bump.outputs.failed == 'true')
         run: |
           gh label create engine-drift --color B60205 --description "An engine update broke the tool" 2>/dev/null || true
           run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          { echo "katana ${{ steps.versions.outputs.katana }} (tested: ${{ steps.versions.outputs.tested }}) fails the LIVE benchmark."; echo; echo '```'; cat verify.txt; echo '```'; echo; echo "Run: $run"; } > body.md
+          { echo "katana ${{ steps.versions.outputs.katana }} (tested: ${{ steps.versions.outputs.tested }}) fails the LIVE benchmark or the tests."; echo; echo '```'; cat verify.txt; echo '```'; echo; echo "Run: $run"; } > body.md
           n=$(gh issue list --label engine-drift --state open --json number --jq '.[0].number')
           if [ -n "$n" ]; then
             gh issue comment "$n" --body-file body.md
           else
             gh issue create --title "Engine drift: katana ${{ steps.versions.outputs.katana }}" --label engine-drift --body-file body.md
           fi
-      - name: Open or update the bump PR
+      - name: Commit the bump and release
+        id: bump
         if: success() && steps.versions.outputs.katana != steps.versions.outputs.tested
         run: |
           old=${{ steps.versions.outputs.tested }}
           new=${{ steps.versions.outputs.katana }}
           # only a newer version is a bump
           [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" = "$new" ] || exit 0
-          branch="engine-bump/katana-$new"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # the LIVE run refreshed bench/fixtures; they stay out of the PR (BENCHMARK.md uses the committed ones)
+          # the LIVE run refreshed bench/fixtures; they stay out of the commit (BENCHMARK.md uses the committed ones)
           git checkout -- bench/fixtures
-          git checkout -B "$branch"
           jq --arg v "$new" '.katana.version = $v' engines.json > engines.json.new
           python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("{\n" + ",\n".join("  %s: %s" % (json.dumps(k), json.dumps(v)) for k, v in d.items()) + "\n}")' engines.json.new > engines.json
           rm engines.json.new
+          if ! go test ./... > test.log 2>&1; then
+            cat test.log
+            { echo "go test ./... fails with engines.json at katana $new:"; tail -40 test.log; } > verify.txt
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add engines.json
           git commit -m "Test with katana $new"
-          git push -f origin "$branch"
-          { echo "katana $old → $new"; echo; echo "The LIVE benchmark passed with katana $new:"; echo; echo '```'; cat verify.txt; echo '```'; echo; echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID (the refreshed fixtures are in the live-workdir artifact)"; } > body.md
-          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
-            gh pr edit "$branch" --title "Test with katana $new" --body-file body.md
-          else
-            gh pr create --head "$branch" --title "Test with katana $new" --body-file body.md
-          fi
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          # a push made with GITHUB_TOKEN does not start release.yml, so tag here
+          .github/release.sh patch
+      - name: Close the drift issue
+        if: success()
+        run: |
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          for n in $(gh issue list --label engine-drift --state open --json number --jq '.[].number'); do
+            gh issue close "$n" --comment "Passes with katana ${{ steps.versions.outputs.katana }}: $run"
+          done

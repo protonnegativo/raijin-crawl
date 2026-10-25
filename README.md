@@ -40,7 +40,11 @@ Against katana's text output, raijin-crawl is **2.4×** smaller on the noisy cra
 go install github.com/protonnegativo/raijin-crawl/cmd/raijin-crawl@latest
 ```
 
-You also need ProjectDiscovery `katana` on `PATH`, or pass `--katana <path>`.
+`@latest` installs the latest release. You also need ProjectDiscovery `katana` on `PATH`, or pass `--katana <path>`.
+
+### Versions
+
+Releases are tagged automatically on every change and on every passing engine update. `raijin-crawl --version` shows the release and the tested engine versions, e.g. `raijin-crawl v0.1.0 (tested with katana 1.8.0)`. `raijin-mcp update` updates every Raijin tool at once.
 
 ## Usage
 
@@ -238,7 +242,7 @@ The Raijin banner is **off by default**, so normal runs stay small. `--banner` p
 
 ## Engine versions
 
-The katana version raijin-crawl was tested with is in [engines.json](engines.json), and built into the binary. When the installed katana has another major version or is older, `errors` says so (`engine_version`, with the install command for the tested version); when katana writes lines without the fields raijin-crawl reads (`request.endpoint`, and a response or an error), `errors` says that too (`engine_format`) and the lines are counted in `omitted.unparsed`. Neither stops the run. A weekly GitHub Actions job runs the live benchmark with the latest katana and opens a PR to bump engines.json when it passes, or an issue when it breaks.
+The katana version raijin-crawl was tested with is in [engines.json](engines.json), and built into the binary. When the installed katana has another major version or is older, `errors` says so (`engine_version`, with the install command for the tested version); when katana writes lines without the fields raijin-crawl reads (`request.endpoint`, and a response or an error), `errors` says that too (`engine_format`) and the lines are counted in `omitted.unparsed`. Neither stops the run. A weekly GitHub Actions job runs the live benchmark with the latest katana and when it passes commits the bump to engines.json and tags a release, or an issue when it breaks.
 
 ## Development
 
