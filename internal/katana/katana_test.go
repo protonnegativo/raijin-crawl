@@ -62,3 +62,64 @@ func TestHostScopeStaysOnHost(t *testing.T) {
 		}
 	}
 }
+
+func TestParseVersion(t *testing.T) {
+	for in, want := range map[string]string{
+		"\n\x1b[34mINF\x1b[0m] Current version: v1.1.2\n": "1.1.2",
+		"[INF] Current version: v1.0.5\n":                 "1.0.5",
+		"flag provided but not defined: -version":         "",
+		"": "",
+	} {
+		if got := ParseVersion(in); got != want {
+			t.Errorf("ParseVersion(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestUntested(t *testing.T) {
+	for _, c := range []struct {
+		installed, tested string
+		want              bool
+	}{
+		{"1.1.2", "1.1.2", false},
+		{"1.1.3", "1.1.2", false},
+		{"1.4.0", "1.1.2", false},
+		{"1.1.1", "1.1.2", true},
+		{"1.0.9", "1.1.2", true},
+		{"2.0.0", "1.1.2", true},
+		{"0.9.0", "1.1.2", true},
+		{"", "1.1.2", false},
+	} {
+		if got := Untested(c.installed, c.tested); got != c.want {
+			t.Errorf("Untested(%q, %q) = %v, want %v", c.installed, c.tested, got, c.want)
+		}
+	}
+	if VersionHint("1.1.2", "1.1.2", "x") != "" || !strings.Contains(VersionHint("1.0.0", "1.1.2", "go install m@v1.1.2"), "katana 1.0.0 is not the tested 1.1.2") {
+		t.Error("VersionHint")
+	}
+}
+
+func TestFormatRenamedField(t *testing.T) {
+	// katana renamed request.endpoint to request.url: no line is an event, and all are counted.
+	in := `{"request":{"method":"GET","url":"http://h.test/"},"response":{"status_code":200}}
+{"request":{"method":"GET","url":"http://h.test/a"},"response":{"status_code":200}}
+`
+	events, st, err := ParseStats(strings.NewReader(in))
+	if err != nil || len(events) != 0 || st.Lines != 2 || st.Unparsed != 2 {
+		t.Fatalf("events %d, stats %+v, err %v", len(events), st, err)
+	}
+	if h := FormatHint(st, "/tmp/raw.jsonl"); !strings.HasPrefix(h, "2 of 2 katana results had no") || !strings.HasSuffix(h, "Read /tmp/raw.jsonl for the full output") {
+		t.Errorf("hint %q", h)
+	}
+	// response renamed: the events stay, but are counted.
+	in = `{"request":{"method":"GET","endpoint":"http://h.test/"},"resp":{"status_code":200}}
+{"request":{"method":"GET","endpoint":"http://h.test/a"},"response":{"headers":{}}}
+`
+	events, st, _ = ParseStats(strings.NewReader(in))
+	if len(events) != 2 || st.NoResult != 1 || FormatHint(st, "") == "" {
+		t.Errorf("events %d, stats %+v", len(events), st)
+	}
+	if FormatHint(Stats{Lines: 3}, "") != "" {
+		t.Error("clean output has no hint")
+	}
+}

@@ -108,25 +108,25 @@ type Options struct {
 	RawPath string
 }
 
-// Run crawls the targets and returns every event, plus the last stderr lines if katana failed.
-func Run(ctx context.Context, targets []string, opt Options) ([]Event, string, error) {
+// Run crawls the targets and returns every event and the parse stats, plus the last stderr lines if katana failed.
+func Run(ctx context.Context, targets []string, opt Options) ([]Event, Stats, string, error) {
 	bin := opt.Binary
 	if bin == "" {
 		bin = "katana"
 	}
 	path, err := exec.LookPath(bin)
 	if err != nil {
-		return nil, "", ErrNotFound
+		return nil, Stats{}, "", ErrNotFound
 	}
 
 	list, err := os.CreateTemp("", "raijin-crawl-targets-*.txt")
 	if err != nil {
-		return nil, "", err
+		return nil, Stats{}, "", err
 	}
 	defer os.Remove(list.Name())
 	if _, err := io.WriteString(list, strings.Join(targets, "\n")+"\n"); err != nil {
 		list.Close()
-		return nil, "", err
+		return nil, Stats{}, "", err
 	}
 	list.Close()
 
@@ -137,29 +137,29 @@ func Run(ctx context.Context, targets []string, opt Options) ([]Event, string, e
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, "", err
+		return nil, Stats{}, "", err
 	}
 	var r io.Reader = stdout
 	if opt.RawPath != "" {
 		raw, err := os.Create(opt.RawPath)
 		if err != nil {
-			return nil, "", err
+			return nil, Stats{}, "", err
 		}
 		defer raw.Close()
 		r = io.TeeReader(stdout, raw)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, "", err
+		return nil, Stats{}, "", err
 	}
-	events, parseErr := Parse(r)
+	events, st, parseErr := ParseStats(r)
 	waitErr := cmd.Wait()
 	if parseErr != nil {
-		return events, tail(stderr.String(), 3), parseErr
+		return events, st, tail(stderr.String(), 3), parseErr
 	}
 	if waitErr != nil {
-		return events, tail(stderr.String(), 3), fmt.Errorf("katana exited: %w", waitErr)
+		return events, st, tail(stderr.String(), 3), fmt.Errorf("katana exited: %w", waitErr)
 	}
-	return events, "", nil
+	return events, st, "", nil
 }
 
 // Args builds the katana command line. -or drops the raw request and response strings, which nothing
@@ -212,26 +212,68 @@ func HostScope(hosts []string) string {
 	return `^https?://(` + strings.Join(alts, "|") + `)(:[0-9]+)?([/?#]|$)`
 }
 
+// Stats counts the output lines Parse read and the ones that did not look like katana results.
+type Stats struct {
+	// Lines are the non-empty lines that are not katana log lines.
+	Lines int
+	// Unparsed are the lines that are not JSON objects with a request endpoint; they are not events.
+	Unparsed int
+	// NoResult are the events with neither a response nor an error; katana writes one of them on
+	// every result, an empty response when the body was already seen.
+	NoResult int
+}
+
 // Parse reads katana JSONL. Lines that are not JSON objects with an endpoint are skipped.
 func Parse(r io.Reader) ([]Event, error) {
+	events, _, err := ParseStats(r)
+	return events, err
+}
+
+// ParseStats is Parse, and also counts the lines that did not have the fields Raijin reads.
+func ParseStats(r io.Reader) ([]Event, Stats, error) {
 	var events []Event
+	var st Stats
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 64*1024*1024)
 	for sc.Scan() {
 		line := bytes.TrimSpace(sc.Bytes())
-		if len(line) == 0 || line[0] != '{' {
+		// katana's log lines ("[INF] ...") are not results, when an --input file has them.
+		if len(line) == 0 || line[0] == '[' {
 			continue
 		}
-		var ev Event
-		if err := json.Unmarshal(line, &ev); err != nil {
+		st.Lines++
+		var ev struct {
+			Event
+			Raw map[string]json.RawMessage
+		}
+		if line[0] != '{' || json.Unmarshal(line, &ev.Event) != nil || json.Unmarshal(line, &ev.Raw) != nil {
+			st.Unparsed++
 			continue
 		}
 		if ev.Request.Endpoint == "" {
+			st.Unparsed++
 			continue
 		}
-		events = append(events, ev)
+		if _, ok := ev.Raw["response"]; !ok && ev.Error == "" {
+			st.NoResult++
+		}
+		events = append(events, ev.Event)
 	}
-	return events, sc.Err()
+	return events, st, sc.Err()
+}
+
+// FormatHint is the engine_format error hint when katana wrote lines without the fields Raijin reads
+// (request.endpoint, and response or error), or "" when every line had them.
+func FormatHint(st Stats, raw string) string {
+	bad := st.Unparsed + st.NoResult
+	if bad == 0 {
+		return ""
+	}
+	hint := fmt.Sprintf("%d of %d katana results had no request.endpoint or no response/error; the engine's output format may have changed", bad, st.Lines)
+	if raw != "" {
+		hint += ". Read " + raw + " for the full output"
+	}
+	return hint
 }
 
 func tail(s string, n int) string {

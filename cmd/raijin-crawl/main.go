@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"strings"
 
+	raijincrawl "github.com/protonnegativo/raijin-crawl"
 	"github.com/protonnegativo/raijin-crawl/internal/banner"
 	"github.com/protonnegativo/raijin-crawl/internal/katana"
 	"github.com/protonnegativo/raijin-crawl/internal/reduce"
@@ -92,13 +93,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	var events []katana.Event
+	var stats katana.Stats
 	if *input != "" {
 		f, err := os.Open(*input)
 		if err != nil {
 			fmt.Fprintln(stderr, "raijin-crawl:", err)
 			return 1
 		}
-		events, err = katana.Parse(f)
+		events, stats, err = katana.ParseStats(f)
 		f.Close()
 		if err != nil {
 			fmt.Fprintln(stderr, "raijin-crawl:", err)
@@ -162,7 +164,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if kf == "none" {
 			kf = ""
 		}
-		events, stderrTail, err = katana.Run(ctx, inScope, katana.Options{
+		if e, err := raijincrawl.Engines(); err == nil {
+			if hint := katana.VersionHint(katana.Version(ctx, *bin), e["katana"].Version, e["katana"].Install()); hint != "" {
+				res.Errors = append(res.Errors, schema.Error{Kind: "engine_version", Hint: hint})
+			}
+		}
+		events, stats, stderrTail, err = katana.Run(ctx, inScope, katana.Options{
 			Binary: *bin, Depth: *depth, JS: *js, KnownFiles: kf, Duration: *duration,
 			Rate: *rate, Timeout: *timeout, Concurrency: *concurrency, Hosts: inScope,
 			Extra: fs.Args(), RawPath: *rawPath,
@@ -184,6 +191,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 			}
 			res.Errors = append(res.Errors, schema.Error{Kind: "engine_error", Hint: hint})
 		}
+	}
+
+	// Lines that are not katana results are counted, and say the output format may have changed.
+	if stats.Unparsed > 0 {
+		res.Omitted["unparsed"] += stats.Unparsed
+	}
+	if hint := katana.FormatHint(stats, res.Raw+*input); hint != "" {
+		res.Errors = append(res.Errors, schema.Error{Kind: "engine_format", Hint: hint})
 	}
 
 	opt := reduce.Defaults()
