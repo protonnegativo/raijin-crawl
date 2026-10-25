@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	raijincrawl "github.com/protonnegativo/raijin-crawl"
 )
 
 func scopeFile(t *testing.T) string {
@@ -39,7 +41,7 @@ func TestBannerGoesToStderrOnly(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !strings.Contains(errb.String(), "TGT-LOCK") || !strings.Contains(errb.String(), "raijin-crawl v"+version) {
+	if !strings.Contains(errb.String(), "TGT-LOCK") || !strings.Contains(errb.String(), "raijin-crawl "+strings.TrimPrefix(version(), "v")) {
 		t.Errorf("banner missing or without the version: %q", errb.String())
 	}
 	if strings.Contains(out.String(), "TGT-LOCK") {
@@ -152,7 +154,9 @@ func TestScopeAloneCrawlsWhatTheScopeNames(t *testing.T) {
 	}
 	got := filepath.Join(dir, "targets.txt")
 	fake := filepath.Join(dir, "katana")
-	script := "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -list ] && cp \"$2\" " + got + "; shift; done\n"
+	// the fake answers -version with the tested version (from engines.json), so it gets no engine_version warning
+	e, _ := raijincrawl.Engines()
+	script := "#!/bin/sh\n[ \"$1\" = -version ] && { echo '[INF] Current version: v" + e["katana"].Version + "' >&2; exit 0; }\nwhile [ $# -gt 0 ]; do [ \"$1\" = -list ] && cp \"$2\" " + got + "; shift; done\n"
 	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -167,9 +171,17 @@ func TestScopeAloneCrawlsWhatTheScopeNames(t *testing.T) {
 	if strings.Join(strings.Fields(string(b)), ",") != "example.com,10.0.0.0,10.0.0.2,10.0.0.3" {
 		t.Errorf("katana got targets %q", b)
 	}
-	var res struct{ Next []string }
+	var res struct {
+		Next   []string
+		Errors []struct{ Kind string }
+	}
 	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
 		t.Fatal(err)
+	}
+	for _, e := range res.Errors {
+		if e.Kind == "engine_version" {
+			t.Errorf("engine_version warning for the tested katana: %s", out.String())
+		}
 	}
 	if len(res.Next) != 2 || !strings.Contains(res.Next[0], "raijin-subs --scope "+scopePath+" -d example.com") || !strings.Contains(res.Next[1], "raijin-probe --scope "+scopePath) {
 		t.Errorf("next = %v", res.Next)

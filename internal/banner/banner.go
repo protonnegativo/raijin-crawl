@@ -122,9 +122,17 @@ func (p painter) hud(tool, version string) []string {
 		row("SIGNAL .... "+strings.Repeat("█", 18)+"░░ 90%", cyan),
 		row("NOISE ..... "+strings.Repeat("░", 20)+" ~0", text),
 		row("OUTPUT .... Raijin Schema · JSON", text),
-		row("BUILD ..... "+tool+" v"+version, text),
+		row("BUILD ..... "+tool+" "+vtag(version), text),
 		p.paint("╰"+strings.Repeat("─", hudWidth)+"╯", frame),
 	}
+}
+
+// vtag writes a release number with its v (1.2.3 and v1.2.3 are v1.2.3) and leaves "dev..." as is.
+func vtag(version string) string {
+	if version != "" && version[0] >= '0' && version[0] <= '9' {
+		return "v" + version
+	}
+	return version
 }
 
 // cells is the terminal width of s: CJK ideographs take two cells.

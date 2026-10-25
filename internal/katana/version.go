@@ -68,5 +68,5 @@ func VersionHint(installed, tested, install string) string {
 	if !Untested(installed, tested) {
 		return ""
 	}
-	return fmt.Sprintf("katana %s is not the tested %s; results may be incomplete. Install the tested version: %s", installed, tested, install)
+	return fmt.Sprintf("katana %s is not the tested %s; results may be incomplete. Install the tested version: %s, or run raijin-mcp update", installed, tested, install)
 }

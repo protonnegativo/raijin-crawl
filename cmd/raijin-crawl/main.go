@@ -22,8 +22,6 @@ import (
 	"github.com/protonnegativo/raijin-crawl/internal/state"
 )
 
-const version = "0.1.0"
-
 type multi []string
 
 func (m *multi) String() string     { return strings.Join(*m, ",") }
@@ -65,10 +63,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	if *showBanner {
-		banner.Write(stderr, "raijin-crawl", version, useColor(stderr))
+		banner.Write(stderr, "raijin-crawl", version(), useColor(stderr))
 	}
 	if *showVersion {
-		fmt.Fprintln(stdout, "raijin-crawl", version)
+		fmt.Fprintln(stdout, versionLine(version()))
 		return 0
 	}
 	if *scopeFile == "" {
@@ -83,7 +81,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	res := schema.Result{
 		Tool:     "raijin-crawl",
-		Version:  version,
+		Version:  version(),
 		Findings: []schema.Finding{},
 		Groups:   []schema.Group{},
 		Omitted:  map[string]int{},
@@ -176,7 +174,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		})
 		switch {
 		case errors.Is(err, katana.ErrNotFound):
-			res.Errors = append(res.Errors, schema.Error{Kind: "missing_engine", Hint: "install katana (go install github.com/projectdiscovery/katana/cmd/katana@latest) or pass --katana <path>"})
+			res.Errors = append(res.Errors, schema.Error{Kind: "missing_engine", Hint: "install katana (go install github.com/projectdiscovery/katana/cmd/katana@latest) or pass --katana <path>, or run raijin-mcp update"})
 			res.Summary = "katana not found, nothing crawled"
 			res.Raw = ""
 			if tempRaw {
