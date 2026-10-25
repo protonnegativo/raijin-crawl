@@ -1,0 +1,100 @@
+name: Engine drift
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      katana:
+        description: katana version to test (latest or a version like 1.2.0)
+        default: latest
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install katana
+        run: |
+          v="${{ inputs.katana || 'latest' }}"
+          case "$v" in latest) ;; v*) ;; *) v="v$v" ;; esac
+          go install "$(jq -r .katana.go engines.json)@$v"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Installed versions
+        id: versions
+        run: |
+          katana -version -duc 2>&1 | tail -1
+          v=$(katana -version -duc 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "katana=$v" >> "$GITHUB_OUTPUT"
+          echo "tested=$(jq -r .katana.version engines.json)" >> "$GITHUB_OUTPUT"
+      - run: pip install tiktoken
+      - name: LIVE benchmark
+        id: bench
+        run: |
+          set +e
+          LIVE=1 PY=python3 bench/run.sh "$RUNNER_TEMP/live" > bench.log 2>&1
+          code=$?
+          cat bench.log
+          grep -E 'missing from output|MISSING|live .* error: engine_format' bench.log > verify.txt
+          if [ $code -ne 0 ] || grep -q MISSING bench.log || grep -q 'error: engine_format' bench.log \
+             || ! grep -q 'missing from output' bench.log; then
+            echo "bench run exited $code" >> verify.txt
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-workdir
+          path: |
+            ${{ runner.temp }}/live
+            bench/fixtures
+            bench.log
+          retention-days: 14
+      - name: Open or update the drift issue
+        if: failure() && steps.bench.conclusion == 'failure'
+        run: |
+          gh label create engine-drift --color B60205 --description "An engine update broke the tool" 2>/dev/null || true
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          { echo "katana ${{ steps.versions.outputs.katana }} (tested: ${{ steps.versions.outputs.tested }}) fails the LIVE benchmark."; echo; echo '```'; cat verify.txt; echo '```'; echo; echo "Run: $run"; } > body.md
+          n=$(gh issue list --label engine-drift --state open --json number --jq '.[0].number')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body-file body.md
+          else
+            gh issue create --title "Engine drift: katana ${{ steps.versions.outputs.katana }}" --label engine-drift --body-file body.md
+          fi
+      - name: Open or update the bump PR
+        if: success() && steps.versions.outputs.katana != steps.versions.outputs.tested
+        run: |
+          old=${{ steps.versions.outputs.tested }}
+          new=${{ steps.versions.outputs.katana }}
+          # only a newer version is a bump
+          [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" = "$new" ] || exit 0
+          branch="engine-bump/katana-$new"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # the LIVE run refreshed bench/fixtures; they stay out of the PR (BENCHMARK.md uses the committed ones)
+          git checkout -- bench/fixtures
+          git checkout -B "$branch"
+          jq --arg v "$new" '.katana.version = $v' engines.json > engines.json.new
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print("{\n" + ",\n".join("  %s: %s" % (json.dumps(k), json.dumps(v)) for k, v in d.items()) + "\n}")' engines.json.new > engines.json
+          rm engines.json.new
+          git add engines.json
+          git commit -m "Test with katana $new"
+          git push -f origin "$branch"
+          { echo "katana $old → $new"; echo; echo "The LIVE benchmark passed with katana $new:"; echo; echo '```'; cat verify.txt; echo '```'; echo; echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID (the refreshed fixtures are in the live-workdir artifact)"; } > body.md
+          if [ -n "$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" ]; then
+            gh pr edit "$branch" --title "Test with katana $new" --body-file body.md
+          else
+            gh pr create --head "$branch" --title "Test with katana $new" --body-file body.md
+          fi

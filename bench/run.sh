@@ -51,6 +51,10 @@ if [ "${LIVE:-}" = 1 ]; then
     crawl=(-u "$u" -d 3 -jc -jsl -kf all -fx -cs '^https?://localhost(:[0-9]+)?([/?#]|$)' -duc -nc)
     "$KATANA" "${crawl[@]}" -jsonl -silent < /dev/null > "$f/katana.jsonl"
     "$KATANA" "${crawl[@]}" < /dev/null > "$f/text.txt" 2> "$f/text_stderr.txt"
+    # what raijin-crawl said about the engine (engine_version, engine_format): the drift job reads it
+    python3 -c 'import json,sys
+for e in json.load(open(sys.argv[1])).get("errors") or []:
+    print("live %s error: %s: %s" % (sys.argv[2], e["kind"], e["hint"]))' "$W/$name.live.json" "$name"
   done
 fi
 
