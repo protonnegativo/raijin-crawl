@@ -45,6 +45,7 @@ You also need ProjectDiscovery `katana` on `PATH`, or pass `--katana <path>`.
 ## Usage
 
 ```bash
+raijin-crawl --scope scope.txt                                  # crawl every host the scope names
 raijin-crawl --scope scope.txt -u https://app.example.com/
 raijin-crawl --scope scope.txt -l start-urls.txt --depth 4 --duration 5m
 raijin-crawl --scope scope.txt --input katana-results.jsonl     # reduce output you already have
@@ -60,6 +61,8 @@ example.com
 10.0.0.0/24
 !admin.example.com
 ```
+
+With no `-u`, `-l` or `--input`, raijin-crawl crawls what the scope names: every domain, every IP, and every address of ranges up to a /24, minus exclusions. Each bare host goes to katana as is, and katana starts it at `https://<host>/`; `next` points to `raijin-probe` for the live web ports. A wildcard names no host and a larger range is too big to sweep blindly, so for each one `next` gives the command that enumerates it first (`raijin-subs` or `raijin-ports`).
 
 Start URLs outside the scope are dropped before katana runs. The crawl stays on the hosts of the start URLs (katana `-cs`, any port), and results and form actions outside the scope are dropped from the output. Both are counted in `omitted.out_of_scope`.
 
@@ -218,7 +221,7 @@ The Raijin banner is **off by default**, so normal runs stay small. `--banner` p
 | Flag | Default | |
 |---|---|---|
 | `--scope` | (required) | scope file |
-| `-u` / `-l` / `--input` | | one start URL (repeatable) / start URL file / existing katana JSONL |
+| `-u` / `-l` / `--input` | every host the scope names | one start URL (repeatable) / start URL file / existing katana JSONL |
 | `--depth` | 3 | maximum crawl depth (katana `-d`); known files need at least 3 |
 | `--js` | true | parse JavaScript for endpoints (katana `-jc -jsl`) |
 | `--known-files` | all | `all`, `robotstxt`, `sitemapxml` or `none` (katana `-kf`) |

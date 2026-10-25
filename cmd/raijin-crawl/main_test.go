@@ -142,3 +142,36 @@ func TestBudgetIsCountedAndPointsToRaw(t *testing.T) {
 		t.Errorf("stdout = %s", out.String())
 	}
 }
+
+// With only --scope, every host the scope names is crawled and wildcards get a next step.
+func TestScopeAloneCrawlsWhatTheScopeNames(t *testing.T) {
+	dir := t.TempDir()
+	scopePath := filepath.Join(dir, "scope.txt")
+	if err := os.WriteFile(scopePath, []byte("example.com\n*.example.com\n10.0.0.0/30\n!10.0.0.1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := filepath.Join(dir, "targets.txt")
+	fake := filepath.Join(dir, "katana")
+	script := "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -list ] && cp \"$2\" " + got + "; shift; done\n"
+	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", scopePath, "--katana", fake, "--raw", filepath.Join(dir, "raw.jsonl")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, errb.String(), out.String())
+	}
+	b, err := os.ReadFile(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(strings.Fields(string(b)), ",") != "example.com,10.0.0.0,10.0.0.2,10.0.0.3" {
+		t.Errorf("katana got targets %q", b)
+	}
+	var res struct{ Next []string }
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Next) != 2 || !strings.Contains(res.Next[0], "raijin-subs --scope "+scopePath+" -d example.com") || !strings.Contains(res.Next[1], "raijin-probe --scope "+scopePath) {
+		t.Errorf("next = %v", res.Next)
+	}
+}
