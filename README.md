@@ -82,8 +82,9 @@ What raijin-crawl asks katana for by default: depth 3 (`-d 3`), JavaScript parsi
 
 ```json
 {
+  "schema_version": 1,
   "tool": "raijin-crawl",
-  "version": "0.1.0",
+  "version": "v0.1.0",
   "target": "http://localhost:19501/",
   "summary": "32 URLs, 4 forms, 31 routes: 21 findings (3 high, 9 medium, 9 low), 10 groups",
   "origin": "http://localhost:19501",
@@ -210,6 +211,8 @@ What the reducer does:
   4. the lowest-ranked findings.
 
   Every cut is counted in `omitted`, `budget.truncated` is set, and `next` points to the raw file. `--max-items` caps the number of findings (0, the default, keeps all).
+- **`schema_version`** is the first field of every result (currently `1`), so an agent can check which version of the Raijin Schema it is reading.
+- **Exit codes:** 0 is ok, 1 is wrong usage (bad flag, missing `--scope`, no target in scope), 2 is a structured error with the JSON on stdout (invalid scope, katana missing): the agent tells them apart by `errors[].kind`.
 - **Errors** say what to try next. If katana is missing, the exit code is 2. An invalid scope file stops the run before katana starts: the exit code is 2 and `errors` has one entry with `kind: "scope"` per invalid line, with the line number and what to write instead.
 
 Fields an agent can rebuild are left out to save tokens:
@@ -259,7 +262,7 @@ bench/run.sh            # replay bench/fixtures and count tokens
 LIVE=1 bench/run.sh     # start the local lab, crawl it again, refresh the fixtures
 ```
 
-Standard library only. katana runs as a subprocess with `-jsonl -silent -nc -duc -or -fx`, so the binary stays small and katana can be updated on its own. Its stdin is `/dev/null`, because katana reads targets from stdin when stdin is not a terminal.
+The only dependency is [raijin-core](https://github.com/protonnegativo/raijin-core) (scope, schema envelope, state); the rest is the standard library. katana runs as a subprocess with `-jsonl -silent -nc -duc -or -fx`, so the binary stays small and katana can be updated on its own. Its stdin is `/dev/null`, because katana reads targets from stdin when stdin is not a terminal.
 
 ## Responsible use
 
