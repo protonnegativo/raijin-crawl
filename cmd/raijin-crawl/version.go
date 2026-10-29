@@ -8,17 +8,25 @@ import (
 	raijincrawl "github.com/protonnegativo/raijin-crawl"
 )
 
-// version is the module version the binary was installed with (go install ...@v1.2.3 or @latest), or
-// "dev" with the VCS revision for a local go build, e.g. "dev-0123456789ab+dirty".
+// releaseVersion is set at link time by release builds: -ldflags "-X main.releaseVersion=v1.2.3".
+// It must stay a plain string variable without an initializer, or -X ignores it.
+var releaseVersion string
+
+// version is releaseVersion when a release build set it, else the module version the binary was installed
+// with (go install ...@v1.2.3 or @latest), or "dev" with the VCS revision for a local go build, e.g.
+// "dev-0123456789ab+dirty".
 func version() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "dev"
+		info = &debug.BuildInfo{}
 	}
 	return buildVersion(info)
 }
 
 func buildVersion(info *debug.BuildInfo) string {
+	if releaseVersion != "" {
+		return releaseVersion
+	}
 	if v := info.Main.Version; v != "" && v != "(devel)" {
 		return v
 	}
