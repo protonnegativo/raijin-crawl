@@ -204,7 +204,7 @@ What the reducer does:
   4. the lowest-ranked findings.
 
   Every cut is counted in `omitted`, `budget.truncated` is set, and `next` points to the raw file. `--max-items` caps the number of findings (0, the default, keeps all).
-- **Errors** say what to try next. If katana is missing, the exit code is 2.
+- **Errors** say what to try next. If katana is missing, the exit code is 2. An invalid scope file stops the run before katana starts: the exit code is 2 and `errors` has one entry with `kind: "scope"` per invalid line, with the line number and what to write instead.
 
 Fields an agent can rebuild are left out to save tokens:
 

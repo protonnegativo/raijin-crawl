@@ -187,3 +187,80 @@ func TestScopeAloneCrawlsWhatTheScopeNames(t *testing.T) {
 		t.Errorf("next = %v", res.Next)
 	}
 }
+
+func TestInvalidScopeStopsBeforeAnyEngine(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "scope.txt")
+	rules := "example.com\nexample.com:443\n10.0.0.7/24\n"
+	if err := os.WriteFile(p, []byte(rules), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// --katana points at a file that does not exist: the scope error must come first.
+	var out, errb bytes.Buffer
+	code := run([]string{"--scope", p, "--katana", filepath.Join(dir, "no-such-katana"), "-u", "https://example.com/"}, &out, &errb)
+	if code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if !strings.HasPrefix(out.String(), `{"schema_version":1,"tool":"raijin-crawl"`) {
+		t.Errorf("not a result: %s", out.String())
+	}
+	var res struct {
+		Summary string `json:"summary"`
+		Errors  []struct {
+			Kind string `json:"kind"`
+			Hint string `json:"hint"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Errors) != 2 {
+		t.Fatalf("want one error per invalid line, got %+v", res.Errors)
+	}
+	for i, want := range []string{"line 2: port in rule 'example.com:443'", "line 3: CIDR has host bits set '10.0.0.7/24'"} {
+		if res.Errors[i].Kind != "scope" || !strings.Contains(res.Errors[i].Hint, want) {
+			t.Errorf("error %d = %+v, want kind scope and hint containing %q", i, res.Errors[i], want)
+		}
+	}
+	for _, e := range res.Errors {
+		if e.Kind == "missing_engine" {
+			t.Error("the engine must not run on an invalid scope")
+		}
+	}
+}
+
+func TestMissingScopeFileIsAScopeError(t *testing.T) {
+	var out, errb bytes.Buffer
+	code := run([]string{"--scope", filepath.Join(t.TempDir(), "nope.txt"), "--input", "../../testdata/sample.jsonl"}, &out, &errb)
+	if code != 2 || !strings.Contains(out.String(), `"kind":"scope"`) || !strings.Contains(out.String(), "cannot read the scope file") {
+		t.Errorf("exit %d: %s", code, out.String())
+	}
+}
+
+func TestResultStartsWithSchemaVersion(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", scopeFile(t), "--input", "../../testdata/sample.jsonl"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.HasPrefix(out.String(), `{"schema_version":1,"tool":"raijin-crawl",`) {
+		t.Errorf("schema_version must be the first field: %.80s", out.String())
+	}
+}
+
+func TestStateMarksNewOnlyOnce(t *testing.T) {
+	st := filepath.Join(t.TempDir(), "state.json")
+	args := []string{"--scope", scopeFile(t), "--input", "../../testdata/sample.jsonl", "--state", st}
+	var first, second, errb bytes.Buffer
+	if code := run(args, &first, &errb); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if code := run(args, &second, &errb); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(first.String(), `"new":true`) || !strings.Contains(first.String(), "11 new") {
+		t.Errorf("first run should mark every finding new: %s", first.String())
+	}
+	if strings.Contains(second.String(), `"new":true`) || !strings.Contains(second.String(), "0 new") {
+		t.Errorf("second run should mark none: %s", second.String())
+	}
+}

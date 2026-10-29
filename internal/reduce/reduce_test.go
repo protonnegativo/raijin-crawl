@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/protonnegativo/raijin-core/scope"
 	"github.com/protonnegativo/raijin-crawl/internal/katana"
 	"github.com/protonnegativo/raijin-crawl/internal/schema"
-	"github.com/protonnegativo/raijin-crawl/internal/scope"
 )
 
 func load(t *testing.T) []katana.Event {
