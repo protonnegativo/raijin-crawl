@@ -30,6 +30,8 @@ Findings crawl: 32 URLs and 4 forms, 21 findings (3 high, 9 medium, 9 low)
   katana -jsonl          ████████████████████     12,098 tokens
 ```
 
+On the findings crawl, katana's text output is smaller: 396 tokens against 1,176 for raijin-crawl. The text is only a list of URLs, while raijin-crawl also gives the status of each URL, the 4 forms (`POST /login` with a `password` field, a multipart `POST /upload`), where each endpoint came from (`robots.txt`, `sitemap.xml`, a JS file), and the `.env`, SQL dump and 401/403 findings ranked first. If the crawl is small, every URL is different and you only need the list, the text output is the cheapest choice. raijin-crawl pays off on a large, repetitive crawl: on the noisy crawl the text costs 3,237 tokens and raijin-crawl 1,372, because `/user/1..60` becomes one entry.
+
 raijin-crawl reads **84×** fewer tokens than `katana -jsonl` on the noisy crawl and **10.3×** fewer on the findings crawl. Against katana's JSONL without the raw strings and bodies (what `-or -ob` writes; see [BENCHMARK.md](BENCHMARK.md)) it is **17×** and **3.0×** smaller. Each crawl's bars are drawn to scale against `katana -jsonl`.
 
 - **Nothing is lost.** Every URL katana reported is in the output with its method, status, content type and query parameter names, and every form with its method, action, fields and encoding. `bench/verify.py` checked all 247 katana results and 4 forms in both crawls and none were missing.
