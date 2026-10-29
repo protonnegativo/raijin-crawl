@@ -18,19 +18,19 @@ Here is the same crawl, with the same URLs, read by an agent (tokens, `o200k_bas
 
 ```
 Noisy crawl: 215 URLs, 60 user pages, 80 product URLs, 31 JS files
-  raijin-crawl           ▎                         1,350 tokens
+  raijin-crawl           ▎                         1,372 tokens
   katana text            ▌                         3,237 tokens
   katana -jsonl, no body ████                     23,158 tokens
   katana -jsonl          ████████████████████    115,723 tokens
 
 Findings crawl: 32 URLs and 4 forms, 21 findings (3 high, 9 medium, 9 low)
-  raijin-crawl           █▉                        1,154 tokens
+  raijin-crawl           █▉                        1,176 tokens
   katana text            ▋                           396 tokens
   katana -jsonl, no body █████▉                    3,560 tokens
   katana -jsonl          ████████████████████     12,098 tokens
 ```
 
-raijin-crawl reads **86×** fewer tokens than `katana -jsonl` on the noisy crawl and **10.5×** fewer on the findings crawl. Against katana's JSONL without the raw strings and bodies (what `-or -ob` writes; see [BENCHMARK.md](BENCHMARK.md)) it is **17×** and **3.1×** smaller. Each crawl's bars are drawn to scale against `katana -jsonl`.
+raijin-crawl reads **84×** fewer tokens than `katana -jsonl` on the noisy crawl and **10.3×** fewer on the findings crawl. Against katana's JSONL without the raw strings and bodies (what `-or -ob` writes; see [BENCHMARK.md](BENCHMARK.md)) it is **17×** and **3.0×** smaller. Each crawl's bars are drawn to scale against `katana -jsonl`.
 
 - **Nothing is lost.** Every URL katana reported is in the output with its method, status, content type and query parameter names, and every form with its method, action, fields and encoding. `bench/verify.py` checked all 247 katana results and 4 forms in both crawls and none were missing.
 - **Routes, not URLs.** `/user/1` to `/user/60` is one route, `/user/{id}`, with one location, `/user/[1-60]`. 40 products with a reviews tab are `/product?id=[1-40]&tab=reviews`. A hash or a UUID is a `{hash}` or `{uuid}` segment, and each one is still listed.
@@ -38,7 +38,7 @@ raijin-crawl reads **86×** fewer tokens than `katana -jsonl` on the noisy crawl
 - **Output is bounded.** On a huge crawl, `--max-bytes` cuts the least important data first and counts every cut. katana's output grows with every URL.
 - **Details are one file away.** katana's full JSONL is saved to disk, and its path is in `raw`. It holds the headers, the bodies, the source page of each link and the timestamps, costs no tokens until the agent opens it, and replays with `--input`.
 
-Against katana's text output, raijin-crawl is **2.4×** smaller on the noisy crawl and **2.9× larger** on the findings crawl. When every route is different there is little to collapse, and the status, type, parameters, IDs, tags and severities cost more than a bare URL list. The text output also has no status codes, no methods, and none of the 4 forms: an agent reading it does not know there is a `POST /login` with a `password` field or a multipart upload. Full method and numbers are in [BENCHMARK.md](BENCHMARK.md), and `bench/run.sh` reproduces them.
+Against katana's text output, raijin-crawl is **2.4×** smaller on the noisy crawl and **3.0× larger** on the findings crawl. When every route is different there is little to collapse, and the status, type, parameters, IDs, tags and severities cost more than a bare URL list. The text output also has no status codes, no methods, and none of the 4 forms: an agent reading it does not know there is a `POST /login` with a `password` field or a multipart upload. Full method and numbers are in [BENCHMARK.md](BENCHMARK.md), and `bench/run.sh` reproduces them.
 
 ## Install
 

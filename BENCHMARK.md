@@ -28,8 +28,8 @@ Reproduce: `bench/run.sh` replays the saved crawls in `bench/fixtures`. `LIVE=1 
 | katana `-jsonl` with raijin-crawl's flags | 153,352 | 55,443 | 2.1× |
 | katana `-jsonl`, no body | 72,367 | 23,158 | 5.0× |
 | katana text (stdout+stderr) | 9,458 | 3,237 | 36× |
-| **raijin-crawl JSON (default)** | 3,155 | **1,350** | **86×** |
-| raijin-crawl `--pretty` | 4,411 | 1,684 | 69× |
+| **raijin-crawl JSON (default)** | 3,205 | **1,372** | **84×** |
+| raijin-crawl `--pretty` | 4,465 | 1,709 | 68× |
 | raijin-crawl `--format table` | 647 | 232 | 499× |
 
 ## Scenario 2: findings
@@ -46,8 +46,8 @@ Reproduce: `bench/run.sh` replays the saved crawls in `bench/fixtures`. `LIVE=1 
 | katana `-jsonl` with raijin-crawl's flags | 17,546 | 5,855 | 2.1× |
 | katana `-jsonl`, no body | 11,462 | 3,560 | 3.4× |
 | katana text (stdout+stderr) | 1,329 | 396 | 31× |
-| **raijin-crawl JSON (default)** | 3,710 | **1,154** | **10.5×** |
-| raijin-crawl `--pretty` | 6,323 | 1,931 | 6.3× |
+| **raijin-crawl JSON (default)** | 3,760 | **1,176** | **10.3×** |
+| raijin-crawl `--pretty` | 6,377 | 1,956 | 6.2× |
 | raijin-crawl `--format table` | 1,389 | 473 | 26× |
 
 In a live run (not a replay) the raijin-crawl JSON also has `raw`, the path of katana's saved JSONL: about 17 tokens.
@@ -65,10 +65,10 @@ What the JSON leaves out stays in katana's JSONL, which raijin-crawl saves to di
 
 ## Reading the numbers
 
-- **Against `katana -jsonl`**, the structured output an agent would parse, raijin-crawl uses **86× fewer tokens** on the noisy crawl and **10.5× fewer** on the findings crawl. Even against the leanest JSONL katana can write (no raw strings, no bodies), it is **17×** and **3.1×** smaller. The gap grows with repetition: 60 user pages cost one route and one location.
+- **Against `katana -jsonl`**, the structured output an agent would parse, raijin-crawl uses **84× fewer tokens** on the noisy crawl and **10.3× fewer** on the findings crawl. Even against the leanest JSONL katana can write (no raw strings, no bodies), it is **17×** and **3.0×** smaller. The gap grows with repetition: 60 user pages cost one route and one location.
 - **Against katana's text output**, the result depends on the crawl:
-  - noisy: **2.4× smaller** (3,237 → 1,350);
-  - findings: **2.9× larger** (396 → 1,154).
+  - noisy: **2.4× smaller** (3,237 → 1,372);
+  - findings: **3.0× larger** (396 → 1,176).
 
   The text output is a bare URL list. When every route is different there is little to collapse, and raijin-crawl's status codes, types, parameter names, IDs, tags and severities cost more than the URLs alone. In exchange the agent gets what the text does not have at all: the status of each URL, the 4 forms (`POST /login` with a `password` field, a multipart `POST /upload`), where each endpoint came from (`robots.txt`, `sitemap.xml`, a JS file), and the `.env`, the SQL dump and the 401/403s ranked first.
 - **The output stays bounded.** On a crawl too big for `--max-bytes`, raijin-crawl cuts the least important data first: group locations, then groups, then extra locations of low-ranked findings, then low-ranked findings. Every cut is counted in `omitted`, and `next` points to the raw file. Raw katana output has no upper bound.
@@ -86,6 +86,6 @@ The token cost of the two choices that matter most, measured by rewriting the fi
 | Full URLs, one per URL | 3,640 | 1,392 | yes |
 | Without the shared `origin`, one per URL | 2,519 | 1,166 | yes |
 | Full URLs, numbers as ranges | 1,641 | 1,365 | yes |
-| **Without the shared `origin`, numbers as ranges** (current) | **1,350** | **1,154** | **yes** |
+| **Without the shared `origin`, numbers as ranges** (current) | **1,372** | **1,176** | **yes** |
 
 One thing changed before the first benchmark run, on hand-run crawls of the same lab: raijin-crawl dropped `-ob` from its katana flags once it was clear that `-ob` stops `-jsl` from finding the JS endpoints. Without it, the findings crawl had no `/api/v1/orders`, `/api/v1/items/42`, `/api/v2/admin/settings` or `/internal/debug`.
