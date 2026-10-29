@@ -88,13 +88,29 @@ func TestMissingEngineExitsTwoWithHint(t *testing.T) {
 	}
 }
 
-func TestUsageErrorsExitOne(t *testing.T) {
-	var out, errb bytes.Buffer
-	if code := run([]string{"--input", "../../testdata/sample.jsonl"}, &out, &errb); code != 1 {
-		t.Errorf("no --scope: exit %d, want 1", code)
+func TestUsageErrorsExitOneWithoutJSON(t *testing.T) {
+	for name, args := range map[string][]string{
+		"no --scope": {"--input", "../../testdata/sample.jsonl"},
+		"bad flag":   {"--no-such-flag"},
+		"no target":  {"--scope", scopeFile(t), "-u", "https://out.of-scope.net/"},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 1 {
+			t.Errorf("%s: exit %d, want 1", name, code)
+		}
+		if out.Len() != 0 {
+			t.Errorf("%s: usage errors print no JSON, got %.80s", name, out.String())
+		}
 	}
-	if code := run([]string{"--scope", scopeFile(t), "-u", "https://out.of-scope.net/"}, &out, &errb); code != 1 {
-		t.Errorf("no target in scope: exit %d, want 1", code)
+}
+
+func TestScopeNamesNoSingleHostExitsTwoWithJSON(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--scope", scopeFile(t)}, &out, &errb); code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if !strings.HasPrefix(out.String(), `{"schema_version":1,`) {
+		t.Errorf("not a result: %.80s", out.String())
 	}
 }
 

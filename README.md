@@ -212,7 +212,7 @@ What the reducer does:
 
   Every cut is counted in `omitted`, `budget.truncated` is set, and `next` points to the raw file. `--max-items` caps the number of findings (0, the default, keeps all).
 - **`schema_version`** is the first field of every result (currently `1`), so an agent can check which version of the Raijin Schema it is reading.
-- **Exit codes:** 0 is ok, 1 is wrong usage (bad flag, missing `--scope`, no target in scope), 2 is a structured error with the JSON on stdout (invalid scope, katana missing): the agent tells them apart by `errors[].kind`.
+- **Exit codes:** 0 is ok, 1 is wrong usage (bad flag, missing `--scope`, no target in scope), 2 is a structured error with the JSON on stdout (invalid scope, a scope that names no single host to crawl, katana missing); 1 never prints JSON: the agent tells them apart by `errors[].kind`.
 - **Errors** say what to try next. If katana is missing, the exit code is 2. An invalid scope file stops the run before katana starts: the exit code is 2 and `errors` has one entry with `kind: "scope"` per invalid line, with the line number and what to write instead.
 
 Fields an agent can rebuild are left out to save tokens:
