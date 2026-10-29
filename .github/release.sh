@@ -38,4 +38,6 @@ git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bo
   tag -a "$next" -m "$next"
 git push origin "$next"
 gh release create "$next" --generate-notes --title "$next"
+# a tag and a Release made with GITHUB_TOKEN start no workflow, so start the binaries build by hand
+gh workflow run goreleaser.yml -f tag="$next"
 echo "released $next"
