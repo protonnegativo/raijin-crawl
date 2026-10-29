@@ -1,5 +1,11 @@
 # ⚡ Raijin Crawl
 
+[![CI](https://github.com/protonnegativo/raijin-crawl/actions/workflows/ci.yml/badge.svg)](https://github.com/protonnegativo/raijin-crawl/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/protonnegativo/raijin-crawl)](https://github.com/protonnegativo/raijin-crawl/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/protonnegativo/raijin-crawl)](LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/protonnegativo/raijin-crawl.svg)](https://pkg.go.dev/github.com/protonnegativo/raijin-crawl)
+[![Go Report Card](https://goreportcard.com/badge/github.com/protonnegativo/raijin-crawl)](https://goreportcard.com/report/github.com/protonnegativo/raijin-crawl)
+
 **katana for AI agents: every endpoint and parameter, URLs collapsed by route pattern (`/user/{id}`), forms, APIs, admin paths and backup files ranked first.**
 
 `raijin-crawl` is a tool of **Raijin**, an arsenal of offensive security tools built for AI agents. It runs [katana](https://github.com/projectdiscovery/katana) underneath and returns the **Raijin Schema**: one compact JSON where URLs that differ only in an ID, a UUID, a hash or a query value share one route entry, forms, parameters, API routes, admin and debug paths, backup and config files and 401/403/5xx answers are ranked findings, static assets are one group per extension, and anything it had to cut is counted.
